@@ -3,6 +3,7 @@
 
 require(ggplot2)
 require(gridExtra)
+require(grid)
 require(plotly)
 require(dplyr)
 require(tidyr)
@@ -302,9 +303,9 @@ make_subset_selection_plot(df_eval = df_eval,
                            best_predictors = best_predictors)
 
 # Estimated test MSE:
-MSE_test_forward = (df_eval %>%
+test_mse_forward = (df_eval %>%
                        dplyr::filter(num_predictors == best_p))$cv_mse
-MSE_test_forward
+test_mse_forward
 
 # Best model from Forward Stepwise Selection:
 df_model = df_train_forward %>%
@@ -455,7 +456,9 @@ test_mse_pls
 
 ### Plot the estimated test Prediction Error by type of tuning parameter
 
-# by lambda (Ridge and Lasso):
+## by lambda (Ridge and Lasso)
+
+# Ridge:
 best_lambda_ridge = cv_ridge$lambda.1se
 df_mse_ridge = data.frame(
     "cv_mse" = cv_ridge$cvm,
@@ -463,6 +466,8 @@ df_mse_ridge = data.frame(
     "lambdas" = cv_ridge$lambda,
     "d" = fit_ridge$df
 )
+
+# Lasso:
 best_lambda_lasso = cv_lasso$lambda.1se
 df_mse_lasso = data.frame(
     "cv_mse" = cv_lasso$cvm,
@@ -470,6 +475,7 @@ df_mse_lasso = data.frame(
     "lambdas" = cv_lasso$lambda,
     "d" = fit_lasso$df
 )
+
 color_ridge = "#f68105"
 color_lasso = "#0591f6"
 p1 = ggplot() +
@@ -615,7 +621,9 @@ p1 = ggplot() +
     xlab("Log(lambda)") +
     ylab(cv_ridge$name)
 
-# by number of components (PCR and PLS):
+## by number of components or predictors (PCR, PLS and Forward Selection)
+
+# PCR:
 p = length(p_predictors)
 best_m_pcr = pls::selectNcomp(fit_pcr,
                               method = "onesigma",
@@ -624,6 +632,8 @@ df_mse_pcr = data.frame(
     "m" = 1:p,
     "cv_mse" = cv_pcr_MSE
 )
+
+# PLS:
 best_m_pls = pls::selectNcomp(fit_pls,
                               method = "onesigma",
                               plot = FALSE)
@@ -631,8 +641,25 @@ df_mse_pls = data.frame(
     "m" = 1:p,
     "cv_mse" = cv_pls_MSE
 )
+
+# Forward Selection:
+df_mse_forward = data.frame(
+    "k" = num_predictors,
+    "cv_mse" = cv_mse,
+    "cv_mse_se" = cv_mse_se
+)
+df_mse_forward$cv_mse_se[is.na(df_mse_forward$cv_mse_se)] = 0
+min_cv_mse = min(df_mse_forward$cv_mse)
+for(i in 2:nrow(df_mse_forward)){
+    if(df_mse_forward$cv_mse[i] - df_mse_forward$cv_mse_se[i] <= min_cv_mse){
+        best_k_forward = i - 1
+        break
+    }
+}
+
 color_pcr = "#43c41a"
 color_pls = "#8621c4"
+color_forward = "#df3f32"
 p2 = ggplot() +
     # PCR:
     geom_point(
@@ -682,12 +709,38 @@ p2 = ggplot() +
         color = "grey",
         linetype = "dashed"
     ) +
+    # Forward Selection:
+    geom_point(
+        data = df_mse_forward,
+        aes(
+            x = k,
+            y = cv_mse,
+            color = "Forward Selection"
+        ),
+        size = 2
+    ) +
+    geom_vline(
+        aes(
+            xintercept = best_k_forward,
+            color = "Forward Selection Largest k within\n1SE of the minimum"
+        ),
+        size = 1,
+        linetype = "dashed",
+        show.legend = TRUE
+    ) +
+    geom_hline(
+        yintercept = df_mse_forward$cv_mse[which(df_mse_forward$k == best_k_forward)],
+        color = "grey",
+        linetype = "dashed"
+    ) +
     scale_colour_manual(
         values = c("PCR" = color_pcr,
                    "PCR Largest m within\n1SE of the minimum" = "#2f8d11",
                    "PLS" = color_pls,
-                   "PLS Largest m within\n1SE of the minimum" = "#722c80"),
-        guide = guide_legend(ncol = 2)
+                   "PLS Largest m within\n1SE of the minimum" = "#722c80",
+                   "Forward Selection" = color_forward,
+                   "Forward Selection Largest m within\n1SE of the minimum" = "#8a2c24"),
+        guide = guide_legend(ncol = 3)
     ) +
     theme(
         axis.text.x = element_text(
@@ -729,18 +782,30 @@ p2 = ggplot() +
             fill = "transparent"
         )
     ) +
-    xlab("Number of components") +
+    xlab("Number of components or predictors") +
     ylab("CV MSE")
 
-
-
+grid.arrange(p1, p2,
+             nrow = 1,
+             ncol = 2,
+             top = textGrob("Model Selection Comparison",
+                            gp = gpar(
+                                fontsize = 16,
+                                font = 3
+                            )
+                        )
+            )
 
 # Best model:
-# best_fit = fit_ ...
-
-
-
-
+df_models = data.frame(
+    "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
+    "cv_mse" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
+    stringsAsFactors = FALSE
+)
+best_model_type = (df_models %>%
+                      dplyr::filter(cv_mse == min(cv_mse)))$models[1] %>%
+                      tolower()
+best_fit = eval(parse(text = paste0("fit_", best_model_type)))
 
 ############ Prediction
 
@@ -751,7 +816,7 @@ df_pred = data.frame(
     "SalePrice" = y_pred
 )
 write.csv(object = df_pred,
-          file = "./data/prediction.csv",
+          file = "./data/prediction_submission_version_1.csv",
           sep = ",",
           row.names = FALSE)
 
