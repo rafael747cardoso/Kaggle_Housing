@@ -12,13 +12,15 @@ get_integer_breaks = function(input_vector, interval = 1){
 
 make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
 
-    
-    names(df_plot)[1:2] = c("line_x", "line_cv_deviance")
+    y_var_name = names(df_eval)[2]
+    names(df_eval)[1:3] = c("num_predictors", "cv_deviance", "cv_deviance_se")
+    names(df_plot)[1:3] = c("num_predictors", "cv_deviance", "cv_deviance_se")
     
     # Best models:
     df_best = df_eval %>%
                   dplyr::filter(predictors == paste(best_predictors, collapse = ','))
     
+    # Discart the null model:
     df_plot = df_plot[2:nrow(df_plot), ]
     df_eval = df_eval[2:nrow(df_eval), ]
     
@@ -37,18 +39,18 @@ make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
     geom_errorbar(
         data = df_plot,
         aes(
-            x = line_x,
-            y = line_cv_deviance,
-            ymin = line_cv_deviance - cv_deviance_se,
-            ymax = line_cv_deviance + cv_deviance_se
+            x = num_predictors,
+            y = cv_deviance,
+            ymin = cv_deviance - cv_deviance_se,
+            ymax = cv_deviance + cv_deviance_se
         ),
         width = 0.1
     ) +
     geom_line(
         data = df_plot,
         aes(
-            x = line_x,
-            y = line_cv_deviance
+            x = num_predictors,
+            y = cv_deviance
         ),
         color = "red",
         size = 1
@@ -58,16 +60,16 @@ make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
         aes(
             x = num_predictors,
             y = cv_deviance,
-            colour = "Best Deviance"
+            colour = "Best model"
         ),
         size = 2,
         alpha = 1
     ) +
     scale_colour_manual(
-        values = c("Best Deviance" = "blue")
+        values = c("Best model" = "blue")
     ) +
     scale_x_continuous(
-        breaks = get_integer_breaks(df_plot$line_x)
+        breaks = get_integer_breaks(df_plot$num_predictors)
     ) +
     theme(
         axis.text.x = element_text(
@@ -110,6 +112,6 @@ make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
         )
     ) +
     xlab("Number of predictors") +
-    ylab("Deviance")
+    ylab(y_var_name)
 
 }
