@@ -304,6 +304,7 @@ df_model = df_train_forward %>%
 fit_forward = glm(formula = SalePrice ~ .,
               data = df_model)
 multi_reg_plots(model_fit = fit_forward)
+saveRDS(fit_forward, "./data/fit_forward.rds")
 
 ###### Ridge Regression
 
