@@ -19,6 +19,9 @@ fix_bad_levels = function(x){
     lvls = gsub(x = lvls,
                 pattern = "\\)",
                 replacement = "")
+    lvls = gsub(x = lvls,
+                pattern = "\\.",
+                replacement = "_")
     levels(x) = lvls
     x = as.character(x)
     return(x)

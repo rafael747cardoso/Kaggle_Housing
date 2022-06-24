@@ -10,6 +10,7 @@ require(fastDummies)
 require(boot)
 require(glmnet)
 require(pls)
+require(Amelia)
 
 source("./funcs/fix_bad_levels.R")
 source("./funcs/make_dens_plot.R")
@@ -22,17 +23,61 @@ set.seed(666)
 ############ Training data
 
 # Read:
-df = read.csv("./data/train.csv")
+df_train = read.csv("./data/train.csv")
+df_test = read.csv("./data/test.csv")
 
 ### Preprocessing
 
+# Concatenate the training and test sets to maintain the structure:
+df_test$SalePrice = -1 # just to know it is the test set
+df_all = rbind(df_train,
+               df_test)
+
+# Fix the variables names starting with a number:
+vars_names = names(df_all)
+vars_names[which(vars_names == "X1stFlrSF")] = "FirstFlrSF"
+vars_names[which(vars_names == "X2ndFlrSF")] = "SecondFlrSF"
+vars_names[which(vars_names == "X3SsnPorch")] = "ThreeSsnPorch"
+names(df_all) = vars_names
+
+# Types of variables:
+response_var = "SalePrice"
+id_var = "Id"
+cat_vars = df_all %>%
+               dplyr::select_if(~!is.numeric(.)) %>%
+               names()
+num_vars = names(df_all)[which(!(names(df_all) %in% c(response_var, cat_vars, id_var)))]
+
+# Remove variables with too many NA's (more than 5% of the observations):
+df_na = df_all %>%
+            summarise(across(everything(), ~ sum(is.na(.)))) %>%
+            t()
+df_na = data.frame(
+    "var_name" = row.names(df_na),
+    "NAs" = df_na[, 1],
+    stringsAsFactors = FALSE
+) %>%
+    dplyr::filter(NAs < 0.05*nrow(df_all))
+df_all = df_all %>%
+              dplyr::select(all_of(df_na$var_name))
+
+# Replace the remaining NA's with the mean (for numeric) or the mode (for categoric):
+df_all
+
+
 # Fix the levels:
-cat_vars = 
+for(var in cat_vars){
+    df_all[var] = fix_bad_levels(df_all[var])
+}
 
-
-df$MSZoning = fix_bad_levels(df$MSZoning)
-
-sort(unique(df$MSZoning))
+# Dummies:
+df = fastDummies::dummy_cols(.data = df,
+                             select_columns = cat_vars,
+                             remove_selected_columns = TRUE,
+                             remove_first_dummy = TRUE)
+dummy_vars = names(df)[which(apply(X = df,
+                                   MARGIN = 2,
+                                   FUN = function(x) length(unique(x))) == 2)]
 
 
 
@@ -66,17 +111,8 @@ df_train_pls = df
 
 
 
-############ Test data
+############ Prediction
 
-# Read:
-df_test = read.csv("./data/test.csv")
-
-### Preprocessing
-
-
-
-
-# Prediction:
 # y_pred = predict(best_fit,
 #                  newx = df_test)
 # df_pred = data.frame(
