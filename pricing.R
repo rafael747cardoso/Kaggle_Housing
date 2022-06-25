@@ -306,14 +306,15 @@ make_subset_selection_plot(df_eval = df_eval_forward,
 # Estimated test MSE:
 test_mse_forward = (df_eval_forward %>%
                        dplyr::filter(num_predictors == best_p))$cv_mse
-test_mse_forward
+test_mse_se_forward = (df_eval_forward %>%
+                          dplyr::filter(num_predictors == best_p))$cv_mse_se
 
 # Best model from Forward Stepwise Selection:
 df_model = df_train_forward %>%
                dplyr::select(all_of(best_predictors),
                              all_of(response_var))
 fit_forward = glm(formula = SalePrice ~ .,
-              data = df_model)
+                  data = df_model)
 saveRDS(fit_forward, "./data/fit_forward.rds")
 multi_reg_plots(model_fit = fit_forward)
 
@@ -346,7 +347,7 @@ make_shrinkage_plot(cv = cv_ridge,
 
 # Estimated Test Prediction Error:
 test_mse_ridge = cv_ridge$cvm[which(cv_ridge$lambda == cv_ridge$lambda.1se)]
-test_mse_ridge
+test_mse_se_ridge = cv_ridge$cvsd[which(cv_ridge$lambda == cv_ridge$lambda.1se)]
 
 ###### The Lasso
 
@@ -377,7 +378,7 @@ make_shrinkage_plot(cv = cv_lasso,
 
 # Estimated Test Prediction Error:
 test_mse_lasso = cv_lasso$cvm[which(cv_lasso$lambda == cv_lasso$lambda.1se)]
-test_mse_lasso
+test_mse_se_lasso = cv_lasso$cvsd[which(cv_lasso$lambda == cv_lasso$lambda.1se)]
 
 ###### Principal Components Regression
 
@@ -865,6 +866,7 @@ grid.arrange(p1, p2,
 df_models = data.frame(
     "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
     "cv_mse" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
+    "cv_mse_se" = c(test_mse_se_ridge, test_mse_se_lasso, test_mse_se_forward, NA, NA),
     stringsAsFactors = FALSE
 )
 best_model_type = (df_models %>%
@@ -872,18 +874,91 @@ best_model_type = (df_models %>%
                       tolower()
 best_fit = eval(parse(text = paste0("fit_", best_model_type)))
 
+ggplot() +
+    geom_point(
+        data = df_models,
+        aes(
+            x = models,
+            y = cv_mse,
+            color = models
+        ),
+        size = 3
+    ) +
+    geom_errorbar(
+        data = df_models,
+        aes(
+            x = models,
+            y = cv_mse,
+            ymin = cv_mse - cv_mse_se,
+            ymax = cv_mse + cv_mse_se,
+            color = models
+        ),
+        width = 1
+    ) +
+    theme(
+        axis.text.x = element_text(
+            size = 14,
+            angle = 0,
+            hjust = 0.5,
+            vjust = 1
+        ),
+        axis.text.y = element_text(
+            size = 14
+        ),
+        axis.title.x = element_text(
+            size = 15,
+            face = "bold"
+        ),
+        axis.title.y = element_text(
+            size = 15,
+            face = "bold"
+        ),
+        panel.background = element_rect(
+            fill = "white"
+        ),
+        panel.grid.major = element_line(
+            size = 0.2,
+            linetype = "solid",
+            colour = "#eaeaea"
+        ),
+        panel.grid.minor = element_line(
+            size = 0.1,
+            linetype = "solid",
+            colour = "#eaeaea"
+        ),
+        legend.position = "none"
+    ) +
+    xlab("Model Selection type") +
+    ylab("CV MSE")
+
 ############ Prediction
 
+# Simply predict with the best model:
 y_pred = predict(best_fit,
-                 newx = df_test_stand)
+                 newdata = df_test_stand %>%
+                               dplyr::select(all_of(names(best_fit$coefficients)[-1])),
+                 type = "response")
+y_pred[y_pred < 0] = 0
 df_pred = data.frame(
     "Id" = df_test_stand$Id,
     "SalePrice" = y_pred
 )
-write.csv(object = df_pred,
+write.csv(df_pred,
           file = "./data/prediction_submission_version_1.csv",
-          sep = ",",
           row.names = FALSE)
+
+# Predict with a ensemble model:
+
+
+
+
+
+
+
+
+
+
+
 
 
 
