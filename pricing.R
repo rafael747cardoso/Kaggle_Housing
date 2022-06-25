@@ -411,7 +411,7 @@ df_best = data.frame(
 
 # Plot:
 make_dim_reduc_plot(df_plot = df_plot %>%
-                                  dplyr::filter(m < 209),
+                                  dplyr::filter(m < 159),
                     df_best = df_best)
 
 # Estimated Test Prediction Error:
@@ -862,17 +862,13 @@ grid.arrange(p1, p2,
                         )
             )
 
-# Best model:
+# Best models:
 df_models = data.frame(
     "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
     "cv_mse" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
     "cv_mse_se" = c(test_mse_se_ridge, test_mse_se_lasso, test_mse_se_forward, NA, NA),
     stringsAsFactors = FALSE
 )
-best_model_type = (df_models %>%
-                      dplyr::filter(cv_mse == min(cv_mse)))$models[1] %>%
-                      tolower()
-best_fit = eval(parse(text = paste0("fit_", best_model_type)))
 
 ggplot() +
     geom_point(
@@ -933,31 +929,136 @@ ggplot() +
 
 ############ Prediction
 
-# Simply predict with the best model:
-y_pred = predict(best_fit,
-                 newdata = df_test_stand %>%
-                               dplyr::select(all_of(names(best_fit$coefficients)[-1])),
-                 type = "response")
+### Estimated competition score for the test set
+
+kaggle_score = function(y_pred, y_real, n_df, n_obs){
+    estimated_score = sqrt(sum((log(y_pred) - log(y_real))**2)/(n_obs - n_df - 1))
+    return(estimated_score)
+}
+
+# Training/Test split:
+set.seed(666)
+ind_test = sample(x = 1:nrow(df_train_stand),
+                  size = trunc(0.4*nrow(df_train_stand)),
+                  replace = FALSE)
+df_train2 = df_train_stand[-ind_test, ]
+df_test2 = df_train_stand[ind_test, ]
+X_df_test2 = df_test2 %>%
+                 dplyr::select(-all_of(response_var))
+
+# Lasso:
+y_pred_lasso = predict(fit_lasso,
+                       as.matrix(X_df_test2),
+                       s = cv_lasso$lambda.1se,
+                       alpha = 1,
+                       standardize = FALSE,
+                       family = "gaussian") %>%
+                   as.numeric()
+estimated_score = kaggle_score(y_pred = y_pred_lasso[y_pred_lasso > 0],
+                               y_real = df_test2[response_var],
+                               n_df = fit_lasso$df[which(cv_lasso$lambda == cv_lasso$lambda.1se)],
+                               n_obs = nrow(df_test2))
+estimated_score
+
+# Ridge:
+y_pred_ridge = predict(fit_ridge,
+                       as.matrix(X_df_test2),
+                       s = cv_ridge$lambda.1se,
+                       alpha = 1,
+                       standardize = FALSE,
+                       family = "gaussian") %>%
+                   as.numeric()
+estimated_score = kaggle_score(y_pred = y_pred_ridge[y_pred_ridge > 0],
+                               y_real = df_test2[response_var],
+                               n_df = fit_ridge$df[which(cv_ridge$lambda == cv_ridge$lambda.1se)],
+                               n_obs = nrow(df_test2))
+estimated_score
+
+# Forward:
+y_pred_forward = predict(fit_forward,
+                         X_df_test2) %>%
+                     as.numeric()
+estimated_score = kaggle_score(y_pred = y_pred_forward[y_pred_forward > 0],
+                               y_real = df_test2[response_var],
+                               n_df = length(fit_forward$coefficients) - 1,
+                               n_obs = nrow(df_test2))
+estimated_score
+
+# PCR:
+fit_pcr_ok = pls::pcr(formula = SalePrice ~ .,
+                      data = df_train_pcr,
+                      scale = FALSE,
+                      ncomp = pls::selectNcomp(fit_pcr,
+                                           method = "onesigma",
+                                           plot = FALSE))
+y_pred_pcr = predict(fit_pcr_ok,
+                     newdata = X_df_test2,
+                     ncomp = pls::selectNcomp(fit_pcr,
+                                           method = "onesigma",
+                                           plot = FALSE)) %>%
+                 as.numeric()
+estimated_score = kaggle_score(y_pred = y_pred_pcr[y_pred_pcr > 0],
+                               y_real = df_test2[response_var],
+                               n_df = pls::selectNcomp(fit_pcr,
+                                                       method = "onesigma",
+                                                       plot = FALSE),
+                               n_obs = nrow(df_test2))
+estimated_score
+
+# PLS:
+fit_pls_ok = pls::pcr(formula = SalePrice ~ .,
+                      data = df_train_pls,
+                      scale = FALSE,
+                      ncomp = pls::selectNcomp(fit_pls,
+                                           method = "onesigma",
+                                           plot = FALSE))
+y_pred_pls = predict(fit_pls_ok,
+                     newdata = X_df_test2,
+                     ncomp = pls::selectNcomp(fit_pls,
+                                           method = "onesigma",
+                                           plot = FALSE)) %>%
+                 as.numeric()
+estimated_score = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
+                               y_real = df_test2[response_var],
+                               n_df = pls::selectNcomp(fit_pls,
+                                                       method = "onesigma",
+                                                       plot = FALSE),
+                               n_obs = nrow(df_test2))
+estimated_score
+
+# Ensemble model:
+y_pred = data.frame(
+    y_pred_lasso,
+    y_pred_ridge,
+    y_pred_forward,
+    y_pred_pcr,
+    y_pred_pls
+) %>%
+    rowMeans()
+estimated_score = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
+                               y_real = df_test2[response_var],
+                               n_df = pls::selectNcomp(fit_pls,
+                                                       method = "onesigma",
+                                                       plot = FALSE),
+                               n_obs = nrow(df_test2))
+estimated_score
+
+
+
+
+# Predict with the best model chosen from the estimated test score:
+y_pred = predict(fit_forward,
+                 df_test_stand %>%
+                             dplyr::select(-all_of(id_var))) %>%
+             as.numeric()
 y_pred[y_pred < 0] = 0
 df_pred = data.frame(
     "Id" = df_test_stand$Id,
     "SalePrice" = y_pred
 )
 write.csv(df_pred,
-          file = "./data/prediction_submission_version_1.csv",
+          file = "./data/submission_forward_selection.csv",
           row.names = FALSE)
-
-# Predict with a ensemble model:
-
-
-
-
-
-
-
-
-
-
 
 
 
