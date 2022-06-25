@@ -1,5 +1,5 @@
 
-### Plot the Cross-validated MSE and the Adjusted R² versus the number of predictors
+### Dimension reduction plot
 
 get_integer_breaks = function(input_vector, interval = 1){
     minimum = floor(min(input_vector))
@@ -10,47 +10,24 @@ get_integer_breaks = function(input_vector, interval = 1){
     return(breaks)
 }
 
-make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
-
-    y_var_name = names(df_eval)[2]
-    names(df_eval)[1:3] = c("num_predictors", "cv_deviance", "cv_deviance_se")
-    names(df_plot)[1:3] = c("num_predictors", "cv_deviance", "cv_deviance_se")
+make_dim_reduc_plot = function(df_plot, df_best){
     
-    # Best models:
-    df_best = df_eval %>%
-                  dplyr::filter(predictors == paste(best_predictors, collapse = ','))
-
-    # Discart the null model:
-    df_plot = df_plot[2:nrow(df_plot), ]
-    df_eval = df_eval[2:nrow(df_eval), ]
-    
-    # CV MSE:
     ggplot() +
     geom_point(
-        data = df_eval,
+        data = df_plot,
         aes(
-            x = num_predictors,
-            y = cv_deviance
+            x = m,
+            y = cv_mse
         ),
         color = "gray",
         size = 1,
         alpha = 0.7
     ) +
-    geom_errorbar(
-        data = df_plot,
-        aes(
-            x = num_predictors,
-            y = cv_deviance,
-            ymin = cv_deviance - cv_deviance_se,
-            ymax = cv_deviance + cv_deviance_se
-        ),
-        width = 0.1
-    ) +
     geom_line(
         data = df_plot,
         aes(
-            x = num_predictors,
-            y = cv_deviance
+            x = m,
+            y = cv_mse
         ),
         color = "red",
         size = 1
@@ -58,19 +35,19 @@ make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
     geom_point(
         data = df_best,
         aes(
-            x = num_predictors,
-            y = cv_deviance,
-            colour = "Best model"
+            x = best_m,
+            y = cv_mse_best_m,
+            colour = "Best Model"
         ),
         size = 2,
         alpha = 1
     ) +
     scale_colour_manual(
-        name = paste0("p = ", df_best$num_predictors[1]),
-        values = c("Best model" = "blue")
+        name = paste0("m = ", df_best$best_m[1]),
+        values = c("Best Model" = "blue")
     ) +
     scale_x_continuous(
-        breaks = get_integer_breaks(df_plot$num_predictors)
+        breaks = get_integer_breaks(df_plot$m)
     ) +
     theme(
         axis.text.x = element_text(
@@ -110,7 +87,8 @@ make_subset_selection_plot = function(df_eval, df_plot, best_predictors){
             fill = "transparent"
         )
     ) +
-    xlab("Number of predictors") +
-    ylab(y_var_name)
-
+    xlab("Number of components") +
+    ylab("CV MSE")
+    
 }
+

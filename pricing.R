@@ -20,6 +20,7 @@ source("./funcs/make_dens_plot.R")
 source("./funcs/make_boxplot.R")
 source("./funcs/make_shrinkage_plot.R")
 source("./funcs/make_subset_selection_plot.R")
+source("./funcs/make_dim_reduc_plot.R")
 source("./funcs/multi_reg_plots.R")
 
 set.seed(666)
@@ -275,35 +276,35 @@ for(k in 0:(p - 1)){
 }
 
 # Prediction error values:
-df_eval = data.frame(
+df_eval_forward = data.frame(
     "num_predictors" = num_predictors,
     "cv_mse" = cv_mse,
     "cv_mse_se" = cv_mse_se,
     "predictors" = predictors_names
 )
-df_eval$cv_mse_se[is.na(df_eval$cv_mse_se)] = 0
-saveRDS(df_eval, "./data/df_eval_forward.rds")
+df_eval_forward$cv_mse_se[is.na(df_eval_forward$cv_mse_se)] = 0
+saveRDS(df_eval_forward, "./data/df_eval_forward.rds")
 
 # Best model with the 1-standard-error rule:
-min_cv_mse = min(df_eval$cv_mse)
-for(i in 2:nrow(df_eval)){
-    if(df_eval$cv_mse[i] - df_eval$cv_mse_se[i] <= min_cv_mse){
+min_cv_mse = min(df_eval_forward$cv_mse)
+for(i in 2:nrow(df_eval_forward)){
+    if(df_eval_forward$cv_mse[i] - df_eval_forward$cv_mse_se[i] <= min_cv_mse){
         best_p = i - 1
         break
     }
 }
-best_predictors = (df_eval %>%
+best_predictors = (df_eval_forward %>%
                        dplyr::filter(num_predictors == best_p))$predictors
 best_predictors = strsplit(x = best_predictors,
                            split = ",")[[1]]
 
 # Plot:
-make_subset_selection_plot(df_eval = df_eval,
-                           df_plot = df_eval,
+make_subset_selection_plot(df_eval = df_eval_forward,
+                           df_plot = df_eval_forward,
                            best_predictors = best_predictors)
 
 # Estimated test MSE:
-test_mse_forward = (df_eval %>%
+test_mse_forward = (df_eval_forward %>%
                        dplyr::filter(num_predictors == best_p))$cv_mse
 test_mse_forward
 
@@ -408,7 +409,8 @@ df_best = data.frame(
 )
 
 # Plot:
-make_dim_reduc_plot(df_plot = df_plot,
+make_dim_reduc_plot(df_plot = df_plot %>%
+                                  dplyr::filter(m < 209),
                     df_best = df_best)
 
 # Estimated Test Prediction Error:
@@ -441,11 +443,12 @@ df_plot = data.frame(
 df_best = data.frame(
     "best_m" = best_m,
     "cv_mse_best_m" = (df_plot %>%
-                          dplyr::filter(m == best_m))$cv_pls[1]
+                          dplyr::filter(m == best_m))$cv_mse[1]
 )
 
 # Plot:
-make_dim_reduc_plot(df_plot = df_plot,
+make_dim_reduc_plot(df_plot = df_plot %>%
+                                  dplyr::filter(m < 200),
                     df_best = df_best)
 
 # Estimated Test Prediction Error:
@@ -476,6 +479,8 @@ df_mse_lasso = data.frame(
     "d" = fit_lasso$df
 )
 
+y_greatest_lass_ridg = 1.1*max(c(max(df_mse_ridge$cv_mse),
+                                 max(df_mse_lasso$cv_mse)))
 color_ridge = "#f68105"
 color_lasso = "#0591f6"
 p1 = ggplot() +
@@ -488,6 +493,15 @@ p1 = ggplot() +
             color = "Ridge"
         ),
         size = 2
+    ) +
+    geom_line(
+        data = df_mse_ridge,
+        aes(
+            x = log(lambdas),
+            y = cv_mse,
+            color = "Ridge"
+        ),
+        size = 1
     ) +
     geom_errorbar(
         data = df_mse_ridge,
@@ -533,6 +547,15 @@ p1 = ggplot() +
             color = "Lasso"
         ),
         size = 2
+    ) +
+    geom_line(
+        data = df_mse_lasso,
+        aes(
+            x = log(lambdas),
+            y = cv_mse,
+            color = "Lasso"
+        ),
+        size = 1
     ) +
     geom_errorbar(
         data = df_mse_lasso,
@@ -618,6 +641,9 @@ p1 = ggplot() +
             fill = "transparent"
         )
     ) +
+    ylim(0, y_greatest_lass_ridg) +
+    xlim(max(c(max(log(df_mse_ridge$lambdas)), max(log(df_mse_lasso$lambdas)))),
+         min(c(min(log(df_mse_ridge$lambdas)), min(log(df_mse_lasso$lambdas)))))
     xlab("Log(lambda)") +
     ylab(cv_ridge$name)
 
@@ -645,8 +671,8 @@ df_mse_pls = data.frame(
 # Forward Selection:
 df_mse_forward = data.frame(
     "k" = num_predictors,
-    "cv_mse" = cv_mse,
-    "cv_mse_se" = cv_mse_se
+    "cv_mse" = df_eval_forward$cv_mse,
+    "cv_mse_se" = df_eval_forward$cv_mse_se
 )
 df_mse_forward$cv_mse_se[is.na(df_mse_forward$cv_mse_se)] = 0
 min_cv_mse = min(df_mse_forward$cv_mse)
@@ -670,6 +696,15 @@ p2 = ggplot() +
             color = "PCR"
         ),
         size = 2
+    ) +
+    geom_line(
+        data = df_mse_pcr,
+        aes(
+            x = m,
+            y = cv_mse,
+            color = "PCR"
+        ),
+        size = 1
     ) +
     geom_vline(
         aes(
@@ -695,6 +730,15 @@ p2 = ggplot() +
         ),
         size = 2
     ) +
+    geom_line(
+        data = df_mse_pls,
+        aes(
+            x = m,
+            y = cv_mse,
+            color = "PLS"
+        ),
+        size = 1
+    ) +
     geom_vline(
         aes(
             xintercept = best_m_pls,
@@ -719,6 +763,26 @@ p2 = ggplot() +
         ),
         size = 2
     ) +
+    geom_line(
+        data = df_mse_forward,
+        aes(
+            x = k,
+            y = cv_mse,
+            color = "Forward Selection"
+        ),
+        size = 1
+    ) +
+    geom_errorbar(
+        data = df_mse_forward,
+        aes(
+            x = k,
+            y = cv_mse,
+            ymin = cv_mse - cv_mse_se,
+            ymax = cv_mse + cv_mse_se
+        ),
+        color = color_forward,
+        width = 0.1
+    ) +
     geom_vline(
         aes(
             xintercept = best_k_forward,
@@ -739,7 +803,7 @@ p2 = ggplot() +
                    "PLS" = color_pls,
                    "PLS Largest m within\n1SE of the minimum" = "#722c80",
                    "Forward Selection" = color_forward,
-                   "Forward Selection Largest m within\n1SE of the minimum" = "#8a2c24"),
+                   "Forward Selection Largest k within\n1SE of the minimum" = "#8a2c24"),
         guide = guide_legend(ncol = 3)
     ) +
     theme(
@@ -782,6 +846,7 @@ p2 = ggplot() +
             fill = "transparent"
         )
     ) +
+    ylim(0, y_greatest_lass_ridg) +
     xlab("Number of components or predictors") +
     ylab("CV MSE")
 
