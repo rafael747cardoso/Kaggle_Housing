@@ -473,14 +473,14 @@ make_comparison_plot(cv_ridge = cv_ridge,
                      cv_pls_MSE = cv_pls_MSE,
                      df_eval_forward = df_eval_forward)
 
-# Best models:
-df_models_best = data.frame(
+df_models_mse = data.frame(
     "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
-    "cv_mse" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
-    "cv_mse_se" = c(test_mse_se_ridge, test_mse_se_lasso, test_mse_se_forward, NA, NA),
+    "metric_name" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
+    "se_metric_name" = c(test_mse_se_ridge, test_mse_se_lasso, test_mse_se_forward, NA, NA),
     stringsAsFactors = FALSE
 )
-make_mest_models_plot(df_models = df_models_best)
+make_mest_models_plot(df_models = df_models_mse,
+                      metric = "CV MSE")
 
 ############ Prediction
 
@@ -509,11 +509,10 @@ y_pred_lasso = predict(fit_lasso,
                        standardize = FALSE,
                        family = "gaussian") %>%
                    as.numeric()
-estimated_score = kaggle_score(y_pred = y_pred_lasso[y_pred_lasso > 0],
-                               y_real = df_test2[response_var],
-                               n_df = fit_lasso$df[which(cv_lasso$lambda == cv_lasso$lambda.1se)],
-                               n_obs = nrow(df_test2))
-estimated_score
+estimated_score_lasso = kaggle_score(y_pred = y_pred_lasso[y_pred_lasso > 0],
+                                     y_real = df_test2[response_var],
+                                     n_df = fit_lasso$df[which(cv_lasso$lambda == cv_lasso$lambda.1se)],
+                                     n_obs = nrow(df_test2))
 
 # Ridge:
 y_pred_ridge = predict(fit_ridge,
@@ -523,21 +522,19 @@ y_pred_ridge = predict(fit_ridge,
                        standardize = FALSE,
                        family = "gaussian") %>%
                    as.numeric()
-estimated_score = kaggle_score(y_pred = y_pred_ridge[y_pred_ridge > 0],
-                               y_real = df_test2[response_var],
-                               n_df = fit_ridge$df[which(cv_ridge$lambda == cv_ridge$lambda.1se)],
-                               n_obs = nrow(df_test2))
-estimated_score
+estimated_score_ridge = kaggle_score(y_pred = y_pred_ridge[y_pred_ridge > 0],
+                                     y_real = df_test2[response_var],
+                                     n_df = fit_ridge$df[which(cv_ridge$lambda == cv_ridge$lambda.1se)],
+                                     n_obs = nrow(df_test2))
 
 # Forward:
 y_pred_forward = predict(fit_forward,
                          X_df_test2) %>%
                      as.numeric()
-estimated_score = kaggle_score(y_pred = y_pred_forward[y_pred_forward > 0],
-                               y_real = df_test2[response_var],
-                               n_df = length(fit_forward$coefficients) - 1,
-                               n_obs = nrow(df_test2))
-estimated_score
+estimated_score_forward = kaggle_score(y_pred = y_pred_forward[y_pred_forward > 0],
+                                       y_real = df_test2[response_var],
+                                       n_df = length(fit_forward$coefficients) - 1,
+                                       n_obs = nrow(df_test2))
 
 # PCR:
 y_pred_pcr = predict(fit_pcr,
@@ -546,13 +543,12 @@ y_pred_pcr = predict(fit_pcr,
                                            method = "onesigma",
                                            plot = FALSE)) %>%
                  as.numeric()
-estimated_score = kaggle_score(y_pred = y_pred_pcr[y_pred_pcr > 0],
-                               y_real = df_test2[response_var],
-                               n_df = pls::selectNcomp(fit_pcr,
-                                                       method = "onesigma",
-                                                       plot = FALSE),
-                               n_obs = nrow(df_test2))
-estimated_score
+estimated_score_pcr = kaggle_score(y_pred = y_pred_pcr[y_pred_pcr > 0],
+                                   y_real = df_test2[response_var],
+                                   n_df = pls::selectNcomp(fit_pcr,
+                                                           method = "onesigma",
+                                                           plot = FALSE),
+                                   n_obs = nrow(df_test2))
 
 # PLS:
 y_pred_pls = predict(fit_pls,
@@ -561,14 +557,12 @@ y_pred_pls = predict(fit_pls,
                                            method = "onesigma",
                                            plot = FALSE)) %>%
                  as.numeric()
-estimated_score = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
-                               y_real = df_test2[response_var],
-                               n_df = pls::selectNcomp(fit_pls,
-                                                       method = "onesigma",
-                                                       plot = FALSE),
-                               n_obs = nrow(df_test2))
-estimated_score
-
+estimated_score_pls = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
+                                   y_real = df_test2[response_var],
+                                   n_df = pls::selectNcomp(fit_pls,
+                                                           method = "onesigma",
+                                                           plot = FALSE),
+                                   n_obs = nrow(df_test2))
 # Ensemble model:
 y_pred = data.frame(
     y_pred_lasso,
@@ -578,13 +572,23 @@ y_pred = data.frame(
     y_pred_pls
 ) %>%
     rowMeans()
-estimated_score = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
-                               y_real = df_test2[response_var],
-                               n_df = pls::selectNcomp(fit_pls,
-                                                       method = "onesigma",
-                                                       plot = FALSE),
-                               n_obs = nrow(df_test2))
-estimated_score
+estimated_score_ensemble = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
+                                        y_real = df_test2[response_var],
+                                        n_df = pls::selectNcomp(fit_pls,
+                                                                method = "onesigma",
+                                                                plot = FALSE),
+                                        n_obs = nrow(df_test2))
+
+# Compare the scores:
+df_models_score = data.frame(
+    "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
+    "metric_name" = c(estimated_score_ridge, estimated_score_lasso, estimated_score_forward,
+                      estimated_score_pcr, estimated_score_pls),
+    "se_metric_name" = c(NA, NA, NA, NA, NA),
+    stringsAsFactors = FALSE
+)
+make_mest_models_plot(df_models = df_models_score,
+                      metric = "Score")
 
 ### Predict with an ensemble model
 

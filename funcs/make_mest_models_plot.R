@@ -1,13 +1,13 @@
 
 ### Best models plot
 
-make_mest_models_plot = function(df_models){
+make_mest_models_plot = function(df_models, metric){
     ggplot() +
         geom_point(
             data = df_models,
             aes(
                 x = models,
-                y = cv_mse,
+                y = metric_name,
                 color = models
             ),
             size = 3
@@ -16,9 +16,9 @@ make_mest_models_plot = function(df_models){
             data = df_models,
             aes(
                 x = models,
-                y = cv_mse,
-                ymin = cv_mse - cv_mse_se,
-                ymax = cv_mse + cv_mse_se,
+                y = metric_name,
+                ymin = metric_name - se_metric_name,
+                ymax = metric_name + se_metric_name,
                 color = models
             ),
             width = 1
@@ -57,6 +57,6 @@ make_mest_models_plot = function(df_models){
             legend.position = "none"
         ) +
         xlab("Model Selection type") +
-        ylab("CV MSE")
+        ylab(metric)
 }
 
