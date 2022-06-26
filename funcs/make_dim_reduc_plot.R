@@ -42,6 +42,7 @@ make_dim_reduc_plot = function(df_plot, df_best){
         size = 2,
         alpha = 1
     ) +
+    scale_y_log10() +
     scale_colour_manual(
         name = paste0("m = ", df_best$best_m[1]),
         values = c("Best Model" = "blue")

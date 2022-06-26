@@ -25,15 +25,13 @@ source("./funcs/multi_reg_plots.R")
 source("./funcs/make_comparison_plot.R")
 source("./funcs/make_mest_models_plot.R")
 
-set.seed(666)
+set.seed(111)
 
 ############ Data
 
 # Read:
 df_train = read.csv("./data/train.csv")
 df_test = read.csv("./data/test.csv")
-
-### Preprocessing
 
 # Special variables:
 response_var = "SalePrice"
@@ -176,8 +174,8 @@ names(df_test_stand)[which(names(df_test_stand) == "id_var")] = id_var
 
 ## maybe remove the predictors with unatural peaks before removing outliers automatically
 # get_outliers = function(x){
-#    which(x > quantile(x)[4] + 1000*IQR(x) |
-#          x < quantile(x)[2] - 100*IQR(x))
+#    which(x > quantile(x)[4] + 10*IQR(x) |
+#          x < quantile(x)[2] - 10*IQR(x))
 # }
 # ind_outs = c()
 # df_predictors = df_train_stand %>%
@@ -321,8 +319,6 @@ df_model = df_train_forward %>%
 fit_forward = glm(formula = paste(response_var, "~.",
                                   collapse = ""),
                   data = df_model)
-saveRDS(fit_forward, "./data/fit_forward.rds")
-fit_forward = readRDS("./data/fit_forward.rds")
 multi_reg_plots(model_fit = fit_forward)
 
 ###### Ridge Regression
@@ -422,7 +418,6 @@ make_dim_reduc_plot(df_plot = df_plot,
 
 # Estimated Test Prediction Error:
 test_mse_pcr = df_best$cv_mse_best_m[1]
-test_mse_pcr
 
 ###### Partial Least Squares
 
@@ -460,7 +455,6 @@ make_dim_reduc_plot(df_plot = df_plot %>%
 
 # Estimated Test Prediction Error:
 test_mse_pls = df_best$cv_mse_best_m[1]
-test_mse_pls
 
 ###### Comparison
 
@@ -473,6 +467,7 @@ make_comparison_plot(cv_ridge = cv_ridge,
                      cv_pls_MSE = cv_pls_MSE,
                      df_eval_forward = df_eval_forward)
 
+# Plot the best MSE's:
 df_models_mse = data.frame(
     "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
     "metric_name" = c(test_mse_ridge, test_mse_lasso, test_mse_forward, test_mse_pcr, test_mse_pls),
@@ -484,7 +479,7 @@ make_mest_models_plot(df_models = df_models_mse,
 
 ############ Prediction
 
-### Estimated competition score for the test set
+###### Estimated competition score for the test set
 
 kaggle_score = function(y_pred, y_real, n_df, n_obs){
     estimated_score = sqrt(sum((log(y_pred) - log(y_real))**2)/(n_obs - n_df - 1))
@@ -581,16 +576,16 @@ estimated_score_ensemble = kaggle_score(y_pred = y_pred_pls[y_pred_pls > 0],
 
 # Compare the scores:
 df_models_score = data.frame(
-    "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS"),
+    "models" = c("Ridge", "Lasso", "Forward", "PCR", "PLS", "Ensemble"),
     "metric_name" = c(estimated_score_ridge, estimated_score_lasso, estimated_score_forward,
-                      estimated_score_pcr, estimated_score_pls),
-    "se_metric_name" = c(NA, NA, NA, NA, NA),
+                      estimated_score_pcr, estimated_score_pls, estimated_score_ensemble),
+    "se_metric_name" = c(NA, NA, NA, NA, NA, NA),
     stringsAsFactors = FALSE
 )
 make_mest_models_plot(df_models = df_models_score,
                       metric = "Score")
 
-### Predict with an ensemble model
+###### Predict with an ensemble model
 
 df_test_final = df_test_stand %>%
                      dplyr::select(-all_of(id_var))

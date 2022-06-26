@@ -255,7 +255,7 @@ multi_reg_plots = function(model_fit){
     df_res$cook_dist = cooks.distance(model_fit)
 
     cook_dist_contour = function(leverage, level, model, side_positive){
-        side_positive*sqrt(level*length(coef(model))*(1 - leverage)/leverage)
+        return(side_positive*sqrt(level*length(coef(model))*(1 - leverage)/leverage))
     }
     
     p4 = ggplot() +
